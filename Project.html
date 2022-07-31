@@ -1,0 +1,548 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <meta http-equiv="Content-Style-Type" content="text/css">
+  <title></title>
+  <meta name="Generator" content="Cocoa HTML Writer">
+  <meta name="CocoaVersion" content="2113.5">
+  <style type="text/css">
+    #free-form {
+      color: purple;
+    }
+    .hide {
+      display: none;
+    }
+    .selected {
+      border: 4px solid black;
+    }
+
+    body {
+      text-align: center;
+    }
+  </style>
+
+</head>
+<body>
+
+
+  <h1>Covid Data By Alexander Gronowski</h1>
+  <div id="free-form">
+  <h1>Now Explore Your State!</h1>
+  Select State to View Data & Click a Button!
+  <select id="selector">
+  <option value="US">United States</option>
+	<option value="AL">Alabama</option>
+	<option value="AK">Alaska</option>
+	<option value="AZ">Arizona</option>
+	<option value="AR">Arkansas</option>
+	<option value="CA">California</option>
+	<option value="CO">Colorado</option>
+	<option value="CT">Connecticut</option>
+	<option value="DE">Delaware</option>
+	<option value="FL">Florida</option>
+	<option value="GA">Georgia</option>
+	<option value="HI">Hawaii</option>
+	<option value="ID">Idaho</option>
+	<option value="IL">Illinois</option>
+	<option value="IN">Indiana</option>
+	<option value="IA">Iowa</option>
+	<option value="KS">Kansas</option>
+	<option value="KY">Kentucky</option>
+	<option value="LA">Louisiana</option>
+	<option value="ME">Maine</option>
+	<option value="MD">Maryland</option>
+	<option value="MA">Massachusetts</option>
+	<option value="MI">Michigan</option>
+	<option value="MN">Minnesota</option>
+	<option value="MS">Mississippi</option>
+	<option value="MO">Missouri</option>
+	<option value="MT">Montana</option>
+	<option value="NE">Nebraska</option>
+	<option value="NV">Nevada</option>
+	<option value="NH">New Hampshire</option>
+	<option value="NJ">New Jersey</option>
+	<option value="NM">New Mexico</option>
+	<option value="NY">New York</option>
+	<option value="NC">North Carolina</option>
+	<option value="ND">North Dakota</option>
+	<option value="OH">Ohio</option>
+	<option value="OK">Oklahoma</option>
+	<option value="OR">Oregon</option>
+	<option value="PA">Pennsylvania</option>
+	<option value="RI">Rhode Island</option>
+	<option value="SC">South Carolina</option>
+	<option value="SD">South Dakota</option>
+	<option value="TN">Tennessee</option>
+	<option value="TX">Texas</option>
+	<option value="UT">Utah</option>
+	<option value="VT">Vermont</option>
+	<option value="VA">Virginia</option>
+	<option value="WA">Washington</option>
+	<option value="WV">West Virginia</option>
+	<option value="WI">Wisconsin</option>
+	<option value="WY">Wyoming</option>
+</select>
+<br />
+  <div >Select a Year to View Cases</div>
+  <div>
+    <button class="selection-button" data-type="cases" data-year="2020">2020</button>
+    <button class="selection-button" data-type="cases" data-year="2021">2021</button>
+    <button class="selection-button" data-type="cases" data-year="2022">2022</button>
+  </div>
+  <br />
+  <div>Select a Year to View Deaths</div>
+  <div>
+    <button class="selection-button" data-type="deaths" data-year="2020">2020</button>
+    <button class="selection-button" data-type="deaths" data-year="2021">2021</button>
+    <button class="selection-button" data-type="deaths" data-year="2022">2022</button>
+  </div>
+</div>
+  <br />
+  <div id="slide-num">Slide 1 of 6</div>
+  <span><button id="prevItem">Previous</button></span>   <span><button id="nextItem">Next</button></span>
+  <h1 id="title"></h1>
+  <svg height="600" width="900"></svg>
+
+  <script>
+    class ChartData {
+      
+
+      constructor() {
+        //state | USA => {year => deaths}
+        this.deathMap = new Map();
+        this.caseMap = new Map();
+        this.x = 5;
+        this.svgHeight = 600;
+        this.svgWidth = 900;
+        this.margin = 100;
+        this.initPage = 0;
+        document.getElementById("prevItem").classList.add("hide");
+        document.getElementById("free-form").classList.add("hide");
+      }
+
+      clickButton = (e) => {
+        if(e.srcElement.id === "nextItem") {
+          this.initPage++;
+        }
+        else {
+          this.initPage--;
+        }
+        if(this.initPage === 0) {
+          document.getElementById("prevItem").classList.add("hide");
+        }
+        if(this.initPage !== 0) {
+          document.getElementById("prevItem").classList.remove("hide");
+        }
+        if(this.initPage === 5) {
+          document.getElementById("nextItem").classList.add("hide");
+          document.getElementById("prevItem").classList.add("hide");
+          document.getElementById("free-form").classList.remove("hide");
+          document.getElementById("slide-num").classList.add("hide");
+        }
+        if(this.initPage !== 5) {
+          document.getElementById("nextItem").classList.remove("hide");
+        }
+        document.getElementById("slide-num").textContent = `Slide ${this.initPage + 1} of 6`
+        this.drawChartSlide();
+
+
+
+      }
+
+      getData(location, type, year) {
+        if(type === "cases") {
+          return this.caseMap.get(location).get(year);
+        }
+        return this.deathMap.get(location).get(year);
+      }
+
+      //load USA data
+      loadUSAData = () => {
+          d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us.csv", this.loadUSADataCallback);
+      }
+
+      loadStateData = () => {
+        d3.csv("https://raw.githubusercontent.com/nytimes/covid-19-data/master/us-states.csv", this.loadStateDataCallback);
+      }
+
+      loadStateDataCallback = (data) => {
+        //state => {year => deaths}
+        //state => deaths[]
+        const stateToCasesMap = new Map();
+        const stateToDeathsMap = new Map();
+        let sumDeath = [];
+        let sumCases = [];
+        for(let i = 0; i<data.length; i++) {
+          const state = data[i].state;
+          const cases = data[i].cases;
+          const deaths = data[i].deaths;
+          const year = data[i].date.substring(0, 4);
+          const date = data[i].date;
+
+          if(!stateToCasesMap.has(state)) {
+            
+            //year => deaths
+            const yearToDataMapDeaths = new Map();
+            const yearToDataMapCases = new Map();
+            yearToDataMapDeaths.set("2020", []);
+            yearToDataMapCases.set("2020", []);
+            yearToDataMapDeaths.set("2021", []);
+            yearToDataMapCases.set("2021", []);
+            yearToDataMapDeaths.set("2022", []);
+            yearToDataMapCases.set("2022", []);
+
+            stateToCasesMap.set(state, yearToDataMapCases)
+            stateToDeathsMap.set(state, yearToDataMapDeaths);
+          }
+          
+          
+          if(stateToCasesMap.has(state)) {
+            const sumDeaths = (stateToDeathsMap.get(state)).get(year);
+            const sumCases = (stateToCasesMap.get(state)).get(year);
+            if(year === "2020") {
+              sumDeaths.push({date: new Date(date), count: Number(deaths)});
+              sumCases.push({date: new Date(date), count: Number(cases)});
+            }
+            else {
+              let prevYear = (Number(year) - 1).toString();
+              const prevYearDeaths = (stateToDeathsMap.get(state)).get(prevYear);
+              const prevYearCases = (stateToCasesMap.get(state)).get(prevYear);
+              const normalizeDeaths = prevYearDeaths[prevYearDeaths.length - 1];
+              const normalizeCases = prevYearCases[prevYearCases.length - 1];
+       
+              let numDeaths = Number(deaths) - Number(normalizeDeaths);
+              let numCases = Number(cases) - Number(normalizeCases);
+              
+              sumDeaths.push({date: new Date(date), count: Number(deaths)});
+              sumCases.push({date: new Date(date), count: Number(cases)});
+
+            }
+            
+
+          }
+        }
+        this.deathMap = new Map([...this.deathMap, ...stateToDeathsMap]);
+        this.caseMap = new Map([...this.caseMap, ...stateToCasesMap]);
+      }
+
+      loadUSADataCallback = (data) => {
+            let sumCases = [];
+            let sumDeaths = [];
+            let currentYear = "2020";
+            let normalizeDeaths = 0;
+            let normalizeCases = 0;
+            const deathMap = new Map();
+            const caseMap = new Map();
+            for(let i = 0; i<data.length; i++) {
+              const year = data[i].date.substring(0, 4);
+              const date = new Date(data[i].date);
+              //a new year
+              if(year !== currentYear) {
+                normalizeCases = Number(data[i-1].cases);
+                normalizeDeaths = Number(data[i-1].deaths);
+                deathMap.set(currentYear, sumDeaths);
+                caseMap.set(currentYear, sumCases);
+                sumCases = [];
+                sumDeaths = [];
+                currentYear = year;
+              }
+
+              
+              sumCases.push({date: date, count: (Number(data[i].cases))});
+              sumDeaths.push({date: date, count: (Number(data[i].deaths))});
+              
+
+            }
+            deathMap.set(currentYear, sumDeaths);
+            caseMap.set(currentYear, sumCases);
+
+            this.deathMap.set("United States", deathMap);
+            this.caseMap.set("United States", caseMap);
+      }
+
+      addListener = () => {
+        const buttons = document.querySelectorAll(".selection-button");
+        for(let i = 0; i<buttons.length; i++) {
+          buttons[i].addEventListener("click", this.drawChart);
+        }
+        document.getElementById("prevItem").addEventListener("click", this.clickButton)
+        document.getElementById("nextItem").addEventListener("click", this.clickButton)
+      }
+
+      clearChart = () => {
+        d3.select('svg').remove();
+      }
+
+      drawChartSlide = () => {
+        let data = null;
+        let location = null
+        let type = null
+        let year = 0;
+        switch (this.initPage) {
+          case 0:
+            location = "United States";
+            type = "cases";
+            year = "2020";
+            break;
+          case 1: 
+            location = "United States";
+            type = "cases";
+            year = "2021";
+            break;
+          case 2: 
+            location = "United States";
+            type = "cases";
+            year = "2022";
+            break;
+          case 3: 
+            location = "United States";
+            type = "Deaths";
+            year = "2020";
+            break;
+          case 4:
+            location = "United States";
+            type = "Deaths";
+            year = "2021";
+            break;
+          case 5:
+            location = "United States";
+            type = "Deaths";
+            year = "2022";
+            break;
+        }
+        data = this.getData(location, type, year);
+        document.getElementById("title").textContent = `${type.toLocaleUpperCase()} in ${location} for the Year: ${year}`
+        this.d3DrawData(data);
+          
+      }
+
+      drawChart = (e) => {
+        const numberSelected = document.querySelectorAll(".selected");
+        if(numberSelected.length === 1) {
+          //all good
+
+        }
+
+        var element = document.getElementById("selector");
+        var value = element.value;
+        var location = element.options[element.selectedIndex].text;
+        let type = "cases";
+        let year = "2020";
+        if(e) {
+          type = e.currentTarget.getAttribute('data-type');
+          year = e.currentTarget.getAttribute('data-year');
+        }
+        const data = this.getData(location, type, year);
+        
+        
+        document.getElementById("title").textContent = `${type.toLocaleUpperCase()} in ${location} for the Year: ${year}`
+
+        this.d3DrawData(data);
+
+     
+
+      }
+
+    d3DrawData = (data) => {
+      console.log(d3.annotation());
+      if(null) return;
+      const xScaleTime = d3.scaleTime().domain([data[0].date, data[data.length-1].date]).range([this.margin, this.svgWidth - this.margin]);
+      const xScale = d3.scaleLinear().domain([0, data.length-1]).range([this.margin, this.svgWidth - this.margin]);
+      const yScale = d3.scaleLinear().domain([d3.min(data, function(d) { 
+        return d.count; }), d3.max(data, function(d) { return d.count; })]).range([this.svgHeight - this.margin, this.margin]);
+
+      const svg = d3.select("svg");
+      svg.selectAll('*').remove();
+      
+      console.log(data[15].date.getFullYear());
+      if(data[15].date.getFullYear() === 2020) {
+      const annotations2020 = [
+      {
+          note: {
+            label: "The first COVID-19 Dose is given",
+            wrap: 150,
+            align: "right"
+          },
+          connector: {
+            end: "arrow" // 'dot' also available
+          },
+          x: xScaleTime(new Date('2020-12-20')),
+          y: yScale(data.find((obj) => obj.date.toString() === new Date('2020-12-20').toString()).count),
+          dy: 20,
+          dx: -50
+        }].map(function(d){ d.color = "#E8336D"; return d})
+
+        const makeAnnotations2020 = d3.annotation()
+          .type(d3.annotationLabel)
+          .annotations(annotations2020)
+
+        d3.select("svg")
+          .append("g")
+          .attr("class", "annotation-group")
+          .call(makeAnnotations2020)
+      }
+
+
+      if(data[15].date.getFullYear() === 2021) {
+          const annotations2021 = [
+      {
+          note: {
+            label: "The first COVID-19 Vaccine is FDA Approved",
+            wrap: 150,
+            align: "right"
+          },
+          connector: {
+            end: "arrow" // 'dot' also available
+          },
+          x: xScaleTime(new Date('2021-08-23')),
+          y: yScale(data.find((obj) => obj.date.toString() === new Date('2021-08-23').toString()).count),
+          dy: 50,
+          dx: 0
+        },
+        {
+          note: {
+            label: "Childeren 5 to 11 Eligible to Be Vaccinated",
+            wrap: 150,
+            align: "right"
+          },
+          connector: {
+            end: "arrow" // 'dot' also available
+          },
+          x: xScaleTime(new Date('2021-11-02')),
+          y: yScale(data.find((obj) => obj.date.toString() === new Date('2021-11-02').toString()).count),
+          dy: 20,
+          dx: 55
+        },
+        {
+          note: {
+            label: "100 million Americans fully vaccinated",
+            wrap: 150,
+            align: "right"
+          },
+          connector: {
+            end: "arrow" // 'dot' also available
+          },
+          x: xScaleTime(new Date('2021-04-30')),
+          y: yScale(data.find((obj) => obj.date.toString() === new Date('2021-04-30').toString()).count),
+          dy: 50,
+          dx: 20
+        },
+        
+      ].map(function(d){ d.color = "#E8336D"; return d})
+
+        const makeAnnotations2021 = d3.annotation()
+          .type(d3.annotationLabel)
+          .annotations(annotations2021)
+
+        d3.select("svg")
+          .append("g")
+          .attr("class", "annotation-group")
+          .call(makeAnnotations2021)
+      }
+
+      if(data[15].date.getFullYear() === 2022) {
+          const annotations2022 = [
+          {
+          note: {
+            label: "President Announces Plan to Ship 500 Million Kits",
+            wrap: 75,
+            align: "right"
+          },
+          connector: {
+            end: "arrow" // 'dot' also available
+          },
+          x: xScaleTime(new Date('2022-02-01')),
+          y: yScale(data.find((obj) => obj.date.toString() === new Date('2022-02-01').toString()).count),
+          dy: 20,
+          dx: 60
+        },
+      {
+          note: {
+            label: "Kids Under 5 Eligible to Be Vaccinated",
+            wrap: 150,
+            align: "right"
+          },
+          connector: {
+            end: "arrow" // 'dot' also available
+          },
+          x: xScaleTime(new Date('2022-07-21')),
+          y: yScale(data.find((obj) => obj.date.toString() === new Date('2022-07-21').toString()).count),
+          dy: -30,
+          dx: 20
+        }].map(function(d){ d.color = "#E8336D"; return d})
+
+        const makeAnnotations2022 = d3.annotation()
+          .type(d3.annotationLabel)
+          .annotations(annotations2022)
+
+        d3.select("svg")
+          .append("g")
+          .attr("class", "annotation-group")
+          .call(makeAnnotations2022)
+      }
+
+
+      svg.append("g")
+        .attr("transform", "translate(0," + (this.svgHeight - this.margin) + ")")
+        .call(d3.axisBottom(xScaleTime));
+
+        svg.append("g")
+        .attr("transform", "translate(" + this.margin + "," + 0 + ")")
+        .call(d3.axisLeft(yScale));
+
+        const line = d3.line()
+          .x(function(d, i) { return xScale(i) })
+          .y(function(d) { return yScale(d) });
+        
+          const arr = [];
+          for(let i = 0; i<data.length; i++) {
+            arr.push(data[i].count);
+          }
+       const path = svg.append("path")
+        .datum(arr)
+        .attr("fill", "none")
+        .attr("stroke", "steelblue")
+        .attr("stroke-linejoin", "round")
+        .attr("stroke-linecap", "round")
+        .attr("stroke-width", 1.5)
+        .attr("d", line);
+
+        const pathLength = path.node().getTotalLength();
+
+        const transitionPath = d3
+        .transition()
+        .ease(d3.easeSin)
+        .duration(6000);
+
+        path
+      .attr("stroke-dashoffset", pathLength)
+      .attr("stroke-dasharray", pathLength)
+      .transition(transitionPath)
+      .attr("stroke-dashoffset", 0);
+    }
+
+
+
+    }
+
+
+    const data = new ChartData();
+    data.addListener();
+    data.loadUSAData();
+    data.loadStateData();
+
+    setTimeout(() => {
+      data.drawChart()
+    }, 500);
+    
+    
+  </script>
+
+  
+   
+    
+</body>
+</html>
